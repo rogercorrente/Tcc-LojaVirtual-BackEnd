@@ -33,36 +33,43 @@ app.post('/upload', upload.single('image'), (req, res) => {
 
 // ---- Rotas de Produtos ----
 
-// Endpoint para adicionar um produto ao banco de dados
 app.post('/produtos', (req, res) => {
     const { nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem, email } = req.body;
 
-    db.run(
-        `INSERT INTO produtos (nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem],
-        function (err) {
-            if (err) {
-                return res.status(500).json({ error: 'Erro ao adicionar produto: ' + err.message });
-            }
-
-            db.run(
-                `UPDATE users SET pontos = pontos + 10, moedas = moedas + 10 WHERE email = ?`,
-                [email],
-                (err) => {
-                    if (err) {
-                        return res.status(500).json({ error: 'Erro ao atualizar pontos e moedas: ' + err.message });
-                    }
-                    res.json({
-                        id: this.lastID,
-                        message: 'Produto adicionado com sucesso!',
-                        pontosGanhados: 10,
-                        moedasGanhas: 10
-                    });
-                }
-            );
+    // Obtém o user_id do usuário com base no email
+    db.get(`SELECT id FROM users WHERE email = ?`, [email], (err, user) => {
+        if (err || !user) {
+            return res.status(500).json({ error: 'Erro ao buscar o usuário.' });
         }
-    );
+
+        db.run(
+            `INSERT INTO produtos (nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem, user.id],
+            function (err) {
+                if (err) {
+                    return res.status(500).json({ error: 'Erro ao adicionar produto: ' + err.message });
+                }
+
+                db.run(
+                    `UPDATE users SET pontos = pontos + 10, moedas = moedas + 10 WHERE email = ?`,
+                    [email],
+                    (err) => {
+                        if (err) {
+                            return res.status(500).json({ error: 'Erro ao atualizar pontos e moedas: ' + err.message });
+                        }
+                        res.json({
+                            id: this.lastID,
+                            message: 'Produto adicionado com sucesso!',
+                            pontosGanhados: 10,
+                            moedasGanhas: 10
+                        });
+                    }
+                );
+            }
+        );
+    });
 });
+
 
 // Endpoint para obter todos os produtos do banco de dados
 app.get('/produtos', (req, res) => {
@@ -73,6 +80,30 @@ app.get('/produtos', (req, res) => {
         res.json(rows);
     });
 });
+
+// Endpoint para obter detalhes de um produto pelo ID, incluindo o nome do doador
+app.get('/produtos/:id', (req, res) => {
+    const produtoId = req.params.id;
+
+    db.get(
+        `SELECT produtos.*, users.nome AS doador 
+         FROM produtos 
+         JOIN users ON produtos.user_id = users.id 
+         WHERE produtos.id = ?`,
+        [produtoId],
+        (err, produto) => {
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao buscar detalhes do produto: ' + err.message });
+            }
+            if (!produto) {
+                return res.status(404).json({ error: 'Produto não encontrado.' });
+            }
+            res.json(produto);
+        }
+    );
+});
+
+
 
 // ---- Rotas de Autenticação ----
 
@@ -267,6 +298,132 @@ app.post('/finalizarPedido', (req, res) => {
             }
         );
     });
+});
+
+
+// Endpoint para obter todos os pedidos de um usuário, incluindo a verificação se já foi avaliado
+app.get('/pedidos/:user_id', (req, res) => {
+    const userId = req.params.user_id;
+
+    db.all(
+        `SELECT pedidos.id, pedidos.valor_total, pedidos.data_pedido,
+                EXISTS (SELECT 1 FROM avaliacoes WHERE avaliacoes.pedido_id = pedidos.id AND avaliacoes.user_id = ?) AS avaliado
+         FROM pedidos
+         WHERE pedidos.user_id = ?
+         ORDER BY pedidos.data_pedido DESC`,
+        [userId, userId],
+        (err, pedidos) => {
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao obter pedidos: ' + err.message });
+            }
+            res.json(pedidos);
+        }
+    );
+});
+
+// Endpoint para obter os itens de um pedido específico
+app.get('/pedidos/:pedido_id/itens', (req, res) => {
+    const pedidoId = req.params.pedido_id;
+
+    db.all(
+        `SELECT produtos.nome, itens_pedido.quantidade, itens_pedido.preco_unitario 
+         FROM itens_pedido 
+         JOIN produtos ON itens_pedido.produto_id = produtos.id 
+         WHERE itens_pedido.pedido_id = ?`,
+        [pedidoId],
+        (err, itens) => {
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao obter itens do pedido: ' + err.message });
+            }
+            res.json(itens);
+        }
+    );
+});
+
+// Endpoint para adicionar uma avaliação para um pedido, verificando se já foi avaliado
+app.post('/avaliarPedido', (req, res) => {
+    const { pedidoId, userId, avaliacao, comentario } = req.body;
+
+    db.get(
+        `SELECT 1 FROM avaliacoes WHERE pedido_id = ? AND user_id = ?`,
+        [pedidoId, userId],
+        (err, row) => {
+            if (err) {
+                console.error('Erro ao verificar avaliação:', err.message);
+                return res.status(500).json({ error: 'Erro ao verificar avaliação.' });
+            }
+
+            if (row) {
+                return res.status(400).json({ message: 'Este pedido já foi avaliado.' });
+            }
+
+            // Insere a avaliação e atualiza pontos e moedas
+            db.serialize(() => {
+                db.run(
+                    `INSERT INTO avaliacoes (pedido_id, user_id, avaliacao, comentario, data_avaliacao) VALUES (?, ?, ?, ?, datetime('now'))`,
+                    [pedidoId, userId, avaliacao, comentario],
+                    function (err) {
+                        if (err) {
+                            console.error('Erro ao salvar a avaliação:', err.message);
+                            return res.status(500).json({ error: 'Erro ao salvar a avaliação.' });
+                        }
+
+                        db.run(
+                            `UPDATE users SET pontos = pontos + 3, moedas = moedas + 3 WHERE id = ?`,
+                            [userId],
+                            function (err) {
+                                if (err) {
+                                    console.error('Erro ao atualizar pontos e moedas:', err.message);
+                                    return res.status(500).json({ error: 'Erro ao atualizar pontos e moedas.' });
+                                }
+
+                                res.json({ message: 'Avaliação enviada e recompensas concedidas!' });
+                            }
+                        );
+                    }
+                );
+            });
+        }
+    );
+});
+
+// Endpoint para obter avaliações de um pedido específico
+app.get('/avaliacoes/:pedido_id', (req, res) => {
+    const pedidoId = req.params.pedido_id;
+
+    db.all(
+        `SELECT users.nome, avaliacoes.avaliacao, avaliacoes.comentario, avaliacoes.data_avaliacao 
+         FROM avaliacoes 
+         JOIN users ON avaliacoes.user_id = users.id 
+         WHERE pedido_id = ?`,
+        [pedidoId],
+        (err, avaliacoes) => {
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao obter avaliações: ' + err.message });
+            }
+            res.json(avaliacoes);
+        }
+    );
+});
+
+//busca as avaliacoes de todas doacoes realizadas pelo doador do item que o usuário está visualizando
+app.get('/avaliacoes_doador/:user_id', (req, res) => {
+    const userId = req.params.user_id;
+
+    db.all(
+        `SELECT avaliacoes.avaliacao, avaliacoes.comentario, avaliacoes.data_avaliacao, users.nome 
+         FROM avaliacoes 
+         JOIN produtos ON avaliacoes.pedido_id = produtos.id
+         JOIN users ON avaliacoes.user_id = users.id
+         WHERE produtos.user_id = ?`,
+        [userId],
+        (err, avaliacoes) => {
+            if (err) {
+                return res.status(500).json({ error: 'Erro ao obter avaliações do doador: ' + err.message });
+            }
+            res.json(avaliacoes);
+        }
+    );
 });
 
 

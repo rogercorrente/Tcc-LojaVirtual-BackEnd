@@ -22,9 +22,12 @@ db.run(`
         tamanho TEXT,
         marca TEXT,
         cor TEXT,
-        imagem TEXT
+        imagem TEXT,
+        user_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
 `);
+
 
 // Cria a tabela de usuários, se não existir
 db.run(`
@@ -74,5 +77,21 @@ db.run(`
         FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE
     )
 `);
+
+// Cria a tabela de avaliações, se não existir
+db.run(`
+    CREATE TABLE IF NOT EXISTS avaliacoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pedido_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        avaliacao INTEGER CHECK(avaliacao BETWEEN 1 AND 5), -- Avaliação de 1 a 5 estrelas
+        comentario TEXT,
+        data_avaliacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+`);
+
+
 
 module.exports = db;
