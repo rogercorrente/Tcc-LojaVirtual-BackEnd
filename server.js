@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const db = require('./database'); // Importa o banco de dados
 
 const app = express();
@@ -440,7 +440,8 @@ process.on('SIGINT', () => {
     });
 });
 
-// Inicia o servidor
-app.listen(3000, () => {
-    console.log('Servidor rodando em http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
+
