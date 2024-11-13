@@ -427,6 +427,12 @@ app.get('/avaliacoes_doador/:user_id', (req, res) => {
 
 
 
+app.get('/status', (req, res) => {
+    res.status(200).json({ message: 'Servidor está ativo!', timestamp: new Date() });
+});
+
+
+
 
 // Fechar conexão com o banco de dados ao encerrar o servidor
 process.on('SIGINT', () => {
