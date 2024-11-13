@@ -31,8 +31,7 @@ app.post('/upload', upload.single('image'), (req, res) => {
     res.json({ url: filePath });
 });
 
-// ---- Rotas de Produtos ----
-
+// ---- Rotas de Produtos -----
 app.post('/produtos', (req, res) => {
     const { nome, descricao, categoria, condicao, valor, tamanho, marca, cor, imagem, email } = req.body;
 
