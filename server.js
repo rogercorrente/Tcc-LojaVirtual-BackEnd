@@ -27,7 +27,7 @@ const upload = multer({ storage });
 
 // Endpoint para fazer upload de uma imagem
 app.post('/upload', upload.single('image'), (req, res) => {
-    const filePath = `http://localhost:3000/${req.file.filename}`;
+    const filePath = `https://tcc-lojavirtual-backend.onrender.com/uploads/${req.file.filename}`;
     res.json({ url: filePath });
 });
 
