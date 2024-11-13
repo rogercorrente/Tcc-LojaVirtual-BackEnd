@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// ---- Rotas de Upload de Imagens ----
+// ---- Rotas de Upload de Imagenss----
 
 // Endpoint para fazer upload de uma imagem
 app.post('/upload', upload.single('image'), (req, res) => {
