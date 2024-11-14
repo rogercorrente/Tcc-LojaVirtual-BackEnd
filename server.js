@@ -434,7 +434,7 @@ app.get('/status', (req, res) => {
 
 
 
-// Fechar conexão com o banco de dados ao encerrar o servidor-
+// Fechar conexão com o banco de dados ao encerrar o servidor
 process.on('SIGINT', () => {
     db.close((err) => {
         if (err) {
